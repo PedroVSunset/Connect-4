@@ -247,6 +247,14 @@ async function handleSlashCommand(interaction) {
     if (game.creatorId !== uid) return interaction.reply({ content: T.notCreator, ephemeral: true });
     if (Object.keys(game.players).length < 2) return interaction.reply({ content: T.notEnough, ephemeral: true });
 
+    // auto-assign colors to players who didn't pick one
+    const usedColors = Object.values(game.players).filter(p => p.colorKey).map(p => p.colorKey);
+    const available  = COLOR_KEYS.filter(k => !usedColors.includes(k));
+    let ai = 0;
+    for (const p of Object.values(game.players)) {
+      if (!p.colorKey) { p.colorKey = available[ai++]; }
+    }
+
     game.phase     = 'playing';
     game.board     = makeBoard(Object.keys(game.players).length);
     game.turnOrder = Object.keys(game.players);
