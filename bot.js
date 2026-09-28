@@ -34,6 +34,7 @@ const LANG = {
     settingsSaved: (lang) => `✅ Idioma salvo: **${lang}**`,
     joinFirst:     'Entre na partida primeiro reagindo com ✋!',
     alreadyIn:     'Você já está na partida!',
+    notCreator:    'Apenas quem criou a partida pode fazer isso!',
     colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azulClaro:'🔵', rosa:'🩷', amarelo:'🟡' },
     colorNames:    { roxo:'Roxo', branco:'Branco', laranja:'Laranja', azulClaro:'Azul Claro', rosa:'Rosa', amarelo:'Amarelo' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
@@ -62,6 +63,7 @@ const LANG = {
     settingsSaved: (lang) => `✅ Language saved: **${lang}**`,
     joinFirst:     'Join the game first by reacting with ✋!',
     alreadyIn:     "You're already in the game!",
+    notCreator:    'Only the player who created the game can do that!',
     colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azulClaro:'🔵', rosa:'🩷', amarelo:'🟡' },
     colorNames:    { roxo:'Purple', branco:'White', laranja:'Orange', azulClaro:'Light Blue', rosa:'Pink', amarelo:'Yellow' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
@@ -100,12 +102,11 @@ function renderBoard(game) {
   const T = LANG[lang];
 
   // header: column numbers
-  let out = T.empty;
+  let out = '';
   for (let c = 0; c < board.cols; c++) out += T.colLabels[c];
   out += '\n';
 
   for (let r = 0; r < board.rows; r++) {
-    out += T.empty; // no row label
     for (let c = 0; c < board.cols; c++) {
       const pid = board.cells[r][c];
       out += pid ? T.colors[players[pid].colorKey] : T.empty;
@@ -241,6 +242,7 @@ client.on('messageCreate', async (msg) => {
     const game = games.get(cid);
     if (!game) return msg.reply(T.noGame);
     if (game.phase !== 'lobby') return;
+    if (game.creatorId !== uid) return msg.reply(T.notCreator);
     if (Object.keys(game.players).length < 2) return msg.reply(T.notEnough);
 
     game.phase     = 'playing';
@@ -257,6 +259,7 @@ client.on('messageCreate', async (msg) => {
   if (content === '!c4 cancelar' || content === '!c4 cancel') {
     const game = games.get(cid);
     if (!game) return msg.reply(T.noGame);
+    if (game.creatorId !== uid) return msg.reply(T.notCreator);
     endGame(cid);
     return msg.channel.send(T.cancelled);
   }
@@ -328,8 +331,11 @@ client.on('messageReactionAdd', async (reaction, user) => {
   const colIdx = colLabels.indexOf(emoji);
   if (colIdx === -1) return; // not a column emoji
 
-  // remove reaction immediately
-  await reaction.users.remove(user).catch(()=>{});
+  // remove reaction immediately (requires Manage Messages permission)
+  try {
+    if (reaction.partial) await reaction.fetch();
+    await reaction.users.remove(user.id);
+  } catch(e) { console.error('Could not remove reaction:', e.message); }
 
   const col = colIdx;
   const channel = reaction.message.channel;
