@@ -434,6 +434,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
         .addOptions(options)
     );
 
+    console.log(`🎨 Menu de cores com ${options.length} opções: ${available.join(', ')}`);
     const channel = reaction.message.channel;
     const colorMsg = await channel.send({ content: `<@${uid}> ${TU.chooseColor}`, components: [row] });
 
@@ -541,6 +542,7 @@ http.createServer((_, res) => res.end('ok')).listen(process.env.PORT || 3000);
 // ── Register slash command on ready ──────────────────────────────────────────
 client.once('ready', async () => {
   console.log(`✅ Bot online: ${client.user.tag}`);
+  console.log(`🎨 Cores carregadas (${COLOR_KEYS.length}): ${COLOR_KEYS.join(', ')}`);
 
   const { REST, Routes, SlashCommandBuilder } = require('discord.js');
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
