@@ -89,8 +89,8 @@ function tChannel(game, key, ...args) {
 const COLOR_KEYS = ['roxo','branco','laranja','azulClaro','rosa','amarelo'];
 
 function makeBoard(players) {
-  const cols = players <= 3 ? 7 : 8;
-  const rows = players <= 3 ? 6 : 10;
+  const cols = 8;
+  const rows = 12;
   return { cols, rows, cells: Array.from({length: rows}, () => Array(cols).fill(null)) };
 }
 
@@ -145,17 +145,28 @@ function isBoardFull(board) {
   return board.cells[0].every(c => c !== null);
 }
 
+function endGame(cid) {
+  const game = games.get(cid);
+  if (game) {
+    clearTimeout(game.timer);
+    game.timer = null;
+    game.phase = 'ended';
+  }
+  games.delete(cid);
+}
+
 // ── Timer ────────────────────────────────────────────────────────────────────
 function startTimer(game) {
   clearTimeout(game.timer);
   game.timer = setTimeout(async () => {
-    const current = game.turnOrder[game.turnIndex];
-    const player  = game.players[current];
-    const channel = await client.channels.fetch(game.channelId).catch(()=>null);
+    const g = games.get(game.channelId);
+    if (!g || g.phase !== 'playing') return;
+    const current = g.turnOrder[g.turnIndex];
+    const channel = await client.channels.fetch(g.channelId).catch(()=>null);
     if (!channel) return;
-    await channel.send(tChannel(game, 'timeout', `<@${current}>`));
-    advanceTurn(game);
-    await updateBoardMessage(game, channel);
+    await channel.send(tChannel(g, 'timeout', `<@${current}>`));
+    advanceTurn(g);
+    await updateBoardMessage(g, channel);
   }, 60_000);
 }
 
@@ -246,8 +257,7 @@ client.on('messageCreate', async (msg) => {
   if (content === '!c4 cancelar' || content === '!c4 cancel') {
     const game = games.get(cid);
     if (!game) return msg.reply(T.noGame);
-    clearTimeout(game.timer);
-    games.delete(cid);
+    endGame(cid);
     return msg.channel.send(T.cancelled);
   }
 
@@ -333,19 +343,17 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
   // check win
   if (checkWin(game.board, landedRow, col, currentId)) {
-    clearTimeout(game.timer);
+    endGame(cid);
     await updateBoardMessage(game, channel);
     await channel.send(tChannel(game, 'wins', `<@${currentId}>`));
-    games.delete(cid);
     return;
   }
 
   // check draw
   if (isBoardFull(game.board)) {
-    clearTimeout(game.timer);
+    endGame(cid);
     await updateBoardMessage(game, channel);
     await channel.send(tChannel(game, 'draw'));
-    games.delete(cid);
     return;
   }
 
