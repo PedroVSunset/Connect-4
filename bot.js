@@ -206,24 +206,23 @@ async function updateBoardMessage(game, channel) {
   startTimer(game);
 }
 
-// ── Commands ──────────────────────────────────────────────────────────────────
-client.on('messageCreate', async (msg) => {
-  if (msg.author.bot) return;
-  const content = msg.content.trim().toLowerCase();
-  const uid     = msg.author.id;
-  const cid     = msg.channel.id;
-  const lang    = userLang.get(uid) || 'pt-BR';
-  const T       = LANG[lang];
+// ── Slash Commands ────────────────────────────────────────────────────────────
+async function handleSlashCommand(interaction) {
+  const uid  = interaction.user.id;
+  const cid  = interaction.channelId;
+  const lang = userLang.get(uid) || 'pt-BR';
+  const T    = LANG[lang];
+  const sub  = interaction.options.getSubcommand();
 
-  // !c4 criar / create
-  if (content === '!c4 criar' || content === '!c4 create') {
-    if (games.has(cid)) return msg.reply(T.alreadyExists);
+  // /c4 criar
+  if (sub === 'criar' || sub === 'create') {
+    if (games.has(cid)) return interaction.reply({ content: T.alreadyExists, ephemeral: true });
 
     const game = {
       channelId:      cid,
       creatorId:      uid,
-      phase:          'lobby', // lobby | color | playing
-      players:        {},      // uid → { colorKey, name }
+      phase:          'lobby',
+      players:        {},
       turnOrder:      [],
       turnIndex:      0,
       board:          null,
@@ -233,44 +232,45 @@ client.on('messageCreate', async (msg) => {
     };
     games.set(cid, game);
 
-    const joinMsg = await msg.channel.send(tChannel(game, 'created', `<@${uid}>`));
+    await interaction.reply({ content: tChannel(game, 'created', `<@${uid}>`) });
+    const joinMsg = await interaction.fetchReply();
     game.joinMessageId = joinMsg.id;
     await joinMsg.react('✋');
     return;
   }
 
-  // !c4 iniciar / start
-  if (content === '!c4 iniciar' || content === '!c4 start') {
+  // /c4 iniciar
+  if (sub === 'iniciar' || sub === 'start') {
     const game = games.get(cid);
-    if (!game) return msg.reply(T.noGame);
-    if (game.phase !== 'lobby') return;
-    if (game.creatorId !== uid) return msg.reply(T.notCreator);
-    if (Object.keys(game.players).length < 2) return msg.reply(T.notEnough);
+    if (!game) return interaction.reply({ content: T.noGame, ephemeral: true });
+    if (game.phase !== 'lobby') return interaction.reply({ content: T.noGame, ephemeral: true });
+    if (game.creatorId !== uid) return interaction.reply({ content: T.notCreator, ephemeral: true });
+    if (Object.keys(game.players).length < 2) return interaction.reply({ content: T.notEnough, ephemeral: true });
 
     game.phase     = 'playing';
     game.board     = makeBoard(Object.keys(game.players).length);
     game.turnOrder = Object.keys(game.players);
     game.turnIndex = 0;
 
-    await msg.channel.send(tChannel(game, 'started'));
-    await updateBoardMessage(game, msg.channel);
+    await interaction.reply({ content: tChannel(game, 'started') });
+    await updateBoardMessage(game, interaction.channel);
     return;
   }
 
-  // !c4 cancelar / cancel
-  if (content === '!c4 cancelar' || content === '!c4 cancel') {
+  // /c4 cancelar
+  if (sub === 'cancelar' || sub === 'cancel') {
     const game = games.get(cid);
-    if (!game) return msg.reply(T.noGame);
-    if (game.creatorId !== uid) return msg.reply(T.notCreator);
+    if (!game) return interaction.reply({ content: T.noGame, ephemeral: true });
+    if (game.creatorId !== uid) return interaction.reply({ content: T.notCreator, ephemeral: true });
     endGame(cid);
-    return msg.channel.send(T.cancelled);
+    return interaction.reply({ content: T.cancelled });
   }
 
-  // !c4 ajuda / help
-  if (content === '!c4 ajuda' || content === '!c4 help') {
-    return msg.reply(T.help);
+  // /c4 ajuda
+  if (sub === 'ajuda' || sub === 'help') {
+    return interaction.reply({ content: T.help, ephemeral: true });
   }
-});
+}
 
 // ── Reactions ─────────────────────────────────────────────────────────────────
 client.on('messageReactionAdd', async (reaction, user) => {
@@ -338,10 +338,14 @@ client.on('messageReactionAdd', async (reaction, user) => {
   const colIdx = colLabels.indexOf(emoji);
   if (colIdx === -1) return; // not a column emoji
 
-  // remove reaction immediately (requires Manage Messages permission)
+  // remove ALL reactions by this user from board message
   try {
-    if (reaction.partial) await reaction.fetch();
-    await reaction.users.remove(user.id);
+    const boardMsg = await reaction.message.channel.messages.fetch(game.boardMessageId);
+    const T2 = LANG[userLang.get(game.creatorId) || 'pt-BR'];
+    for (const colEmoji of T2.colLabels) {
+      const r = boardMsg.reactions.cache.get(colEmoji);
+      if (r) await r.users.remove(user.id).catch(()=>{});
+    }
   } catch(e) { console.error('Could not remove reaction:', e.message); }
 
   const col = colIdx;
@@ -374,16 +378,16 @@ client.on('messageReactionAdd', async (reaction, user) => {
   await updateBoardMessage(game, channel);
 });
 
-// ── Select menu: color pick ───────────────────────────────────────────────────
+// ── Interactions (slash commands + select menus) ─────────────────────────────
 client.on('interactionCreate', async (interaction) => {
-  // /c4 settings slash command
-  if (interaction.isChatInputCommand && interaction.commandName === 'c4') {
-    const sub = interaction.options?.getSubcommand();
+  // Slash commands
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName !== 'c4') return;
+    const sub = interaction.options.getSubcommand();
     if (sub === 'settings') {
       const uid  = interaction.user.id;
       const lang = userLang.get(uid) || 'pt-BR';
       const T    = LANG[lang];
-
       const row = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`lang_${uid}`)
@@ -395,6 +399,7 @@ client.on('interactionCreate', async (interaction) => {
       );
       return interaction.reply({ content: `${T.settingsTitle}\n${T.settingsDesc}`, components: [row], ephemeral: true });
     }
+    return handleSlashCommand(interaction);
   }
 
   if (!interaction.isStringSelectMenu()) return;
@@ -452,10 +457,12 @@ client.once('ready', async () => {
   const commands = [
     new SlashCommandBuilder()
       .setName('c4')
-      .setDescription('Connect 4 settings')
-      .addSubcommand(sub =>
-        sub.setName('settings').setDescription('Change your language / Mude seu idioma')
-      )
+      .setDescription('Connect 4 — Quatro em Linha')
+      .addSubcommand(s => s.setName('criar').setDescription('Cria uma nova partida / Create a new game'))
+      .addSubcommand(s => s.setName('iniciar').setDescription('Inicia a partida / Start the game'))
+      .addSubcommand(s => s.setName('cancelar').setDescription('Cancela a partida / Cancel the game'))
+      .addSubcommand(s => s.setName('ajuda').setDescription('Mostra ajuda / Show help'))
+      .addSubcommand(s => s.setName('settings').setDescription('Mude seu idioma / Change your language'))
       .toJSON(),
   ];
 
