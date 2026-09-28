@@ -459,10 +459,9 @@ client.once('ready', async () => {
       .toJSON(),
   ];
 
-  await rest.put(
-    Routes.applicationCommands(client.user.id),
-    { body: commands }
-  ).catch(console.error);
+  for (const cmd of commands) {
+    await rest.post(Routes.applicationCommands(client.user.id), { body: cmd }).catch(console.error);
+  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
