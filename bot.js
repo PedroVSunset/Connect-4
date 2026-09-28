@@ -37,8 +37,8 @@ const LANG = {
     joinFirst:     'Entre na partida primeiro reagindo com ✋!',
     alreadyIn:     'Você já está na partida!',
     notCreator:    'Apenas quem criou a partida pode fazer isso!',
-    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azulClaro:'🔵', rosa:'🩷', amarelo:'🟡' },
-    colorNames:    { roxo:'Roxo', branco:'Branco', laranja:'Laranja', azulClaro:'Azul Claro', rosa:'Rosa', amarelo:'Amarelo' },
+    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azul:'🔵', azulClaro:'🩵', rosa:'🩷', amarelo:'🟡', cinza:'🩶', vermelha:'🔴' },
+    colorNames:    { roxo:'Roxo', branco:'Branco', laranja:'Laranja', azul:'Azul', azulClaro:'Azul Claro', rosa:'Rosa', amarelo:'Amarelo', cinza:'Cinza', vermelha:'Vermelha' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
     empty:         '⬛',
     help:          '`!c4 criar` — Cria partida\n`!c4 entrar` — Entra na partida\n`!c4 iniciar` — Inicia o jogo\n`!c4 cancelar` — Cancela partida\n`/c4 settings` — Configurações',
@@ -66,8 +66,8 @@ const LANG = {
     joinFirst:     'Join the game first by reacting with ✋!',
     alreadyIn:     "You're already in the game!",
     notCreator:    'Only the player who created the game can do that!',
-    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azulClaro:'🔵', rosa:'🩷', amarelo:'🟡' },
-    colorNames:    { roxo:'Purple', branco:'White', laranja:'Orange', azulClaro:'Light Blue', rosa:'Pink', amarelo:'Yellow' },
+    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azul:'🔵', azulClaro:'🩵', rosa:'🩷', amarelo:'🟡', cinza:'🩶', vermelha:'🔴' },
+    colorNames:    { roxo:'Purple', branco:'White', laranja:'Orange', azul:'Blue', azulClaro:'Light Blue', rosa:'Pink', amarelo:'Yellow', cinza:'Gray', vermelha:'Red' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
     empty:         '⬛',
     help:          '`!c4 create` — Create game\n`!c4 join` — Join game\n`!c4 start` — Start game\n`!c4 cancel` — Cancel game\n`/c4 settings` — Settings',
@@ -90,7 +90,7 @@ function tChannel(game, key, ...args) {
 }
 
 // ── Board helpers ─────────────────────────────────────────────────────────────
-const COLOR_KEYS = ['roxo','branco','laranja','azulClaro','rosa','amarelo'];
+const COLOR_KEYS = ['roxo','branco','laranja','azul','azulClaro','rosa','amarelo','cinza','vermelha'];
 
 function makeBoard(players) {
   const cols = 8;
