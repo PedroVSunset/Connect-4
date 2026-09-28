@@ -27,7 +27,7 @@ const LANG = {
     timeout:       (u) => `⏰ ${u} demorou demais! Vez pulada.`,
     noGame:        'Nenhuma partida ativa neste canal.',
     notYourTurn:   'Não é sua vez!',
-    alreadyExists: 'Já existe uma partida neste canal! Use `!c4 cancelar` para cancelar.',
+    alreadyExists: 'Já existe uma partida neste canal! Use `/c4 cancelar` para cancelar.',
     cancelled:     '❌ Partida cancelada.',
     notEnough:     'Pelo menos 1 jogador precisa entrar na partida (reaja com ✋).',
     botJoined:     '🤖 Só tem 1 jogador, então o **Bot** entrou na partida para jogar com você!',
@@ -38,11 +38,11 @@ const LANG = {
     joinFirst:     'Entre na partida primeiro reagindo com ✋!',
     alreadyIn:     'Você já está na partida!',
     notCreator:    'Apenas quem criou a partida pode fazer isso!',
-    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azul:'🔵', azulClaro:'🩵', rosa:'🩷', amarelo:'🟡', cinza:'🩶', vermelha:'🔴' },
-    colorNames:    { roxo:'Roxo', branco:'Branco', laranja:'Laranja', azul:'Azul', azulClaro:'Azul Claro', rosa:'Rosa', amarelo:'Amarelo', cinza:'Cinza', vermelha:'Vermelha' },
+    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azul:'🔵', azulClaro:'🩵', rosa:'🩷', amarelo:'🟡', cinza:'🩶', vermelha:'🔴', verde:'🟢', marrom:'🟤' },
+    colorNames:    { roxo:'Roxo', branco:'Branco', laranja:'Laranja', azul:'Azul', azulClaro:'Azul Claro', rosa:'Rosa', amarelo:'Amarelo', cinza:'Cinza', vermelha:'Vermelha', verde:'Verde', marrom:'Marrom' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
     empty:         '⬛',
-    help:          '`!c4 criar` — Cria partida\n`!c4 entrar` — Entra na partida\n`!c4 iniciar` — Inicia o jogo\n`!c4 cancelar` — Cancela partida\n`/c4 settings` — Configurações',
+    help:          '`/c4 criar` — Cria partida\n`/c4 entrar` — Entra na partida\n`/c4 iniciar` — Inicia o jogo\n`/c4 cancelar` — Cancela partida\n`/c4 settings` — Configurações',
   },
   'en-US': {
     created:       (u) => `✅ Match created by ${u}! React with ✋ to join (up to 5 players). Start alone and the Bot will play with you!`,
@@ -57,7 +57,7 @@ const LANG = {
     timeout:       (u) => `⏰ ${u} took too long! Turn skipped.`,
     noGame:        'No active game in this channel.',
     notYourTurn:   "It's not your turn!",
-    alreadyExists: 'A game already exists in this channel! Use `!c4 cancel` to cancel.',
+    alreadyExists: 'A game already exists in this channel! Use `/c4 cancel` to cancel.',
     cancelled:     '❌ Game cancelled.',
     notEnough:     'At least 1 player must join the game (react with ✋).',
     botJoined:     "🤖 Only 1 player joined, so the **Bot** joined the match to play with you!",
@@ -68,11 +68,11 @@ const LANG = {
     joinFirst:     'Join the game first by reacting with ✋!',
     alreadyIn:     "You're already in the game!",
     notCreator:    'Only the player who created the game can do that!',
-    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azul:'🔵', azulClaro:'🩵', rosa:'🩷', amarelo:'🟡', cinza:'🩶', vermelha:'🔴' },
-    colorNames:    { roxo:'Purple', branco:'White', laranja:'Orange', azul:'Blue', azulClaro:'Light Blue', rosa:'Pink', amarelo:'Yellow', cinza:'Gray', vermelha:'Red' },
+    colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azul:'🔵', azulClaro:'🩵', rosa:'🩷', amarelo:'🟡', cinza:'🩶', vermelha:'🔴', verde:'🟢', marrom:'🟤' },
+    colorNames:    { roxo:'Purple', branco:'White', laranja:'Orange', azul:'Blue', azulClaro:'Light Blue', rosa:'Pink', amarelo:'Yellow', cinza:'Gray', vermelha:'Red', verde:'Green', marrom:'Brown' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
     empty:         '⬛',
-    help:          '`!c4 create` — Create game\n`!c4 join` — Join game\n`!c4 start` — Start game\n`!c4 cancel` — Cancel game\n`/c4 settings` — Settings',
+    help:          '`/c4 create` — Create game\n`/c4 join` — Join game\n`/c4 start` — Start game\n`/c4 cancel` — Cancel game\n`/c4 settings` — Settings',
   },
 };
 
@@ -100,7 +100,7 @@ function mention(id) {
 }
 
 // ── Board helpers ─────────────────────────────────────────────────────────────
-const COLOR_KEYS = ['roxo','branco','laranja','azul','azulClaro','rosa','amarelo','cinza','vermelha'];
+const COLOR_KEYS = ['roxo','branco','laranja','azul','azulClaro','rosa','amarelo','cinza','vermelha','verde','marrom'];
 
 function makeBoard(players) {
   const cols = 8;
