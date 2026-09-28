@@ -18,7 +18,7 @@ const LANG = {
     colorTaken:    'Essa cor já foi escolhida! Tente outra.',
     waitingPlayers:(n) => `Aguardando jogadores... (${n}/5)\nDigite \`!c4 iniciar\` quando todos estiverem prontos.`,
     started:       '🎮 Jogo iniciado!',
-    turn:          (u, color) => `Vez de ${u} ${color} — escolha **letra** depois **número** reagindo abaixo. ⏱️ 60s`,
+    turn:          (u, color) => `Vez de ${u} ${color} — escolha a **coluna** reagindo com um número abaixo. ⏱️ 60s`,
     invalidMove:   'Jogada inválida! Coluna cheia ou fora do tabuleiro.',
     wins:          (u) => `🏆 ${u} venceu!`,
     draw:          '🤝 Empate! Tabuleiro cheio.',
@@ -37,7 +37,6 @@ const LANG = {
     colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azulClaro:'🔵', rosa:'🩷', amarelo:'🟡' },
     colorNames:    { roxo:'Roxo', branco:'Branco', laranja:'Laranja', azulClaro:'Azul Claro', rosa:'Rosa', amarelo:'Amarelo' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
-    rowLabels:     ['🇦','🇧','🇨','🇩','🇪','🇫','🇬','🇭','🇮','🇯'],
     empty:         '⬛',
     help:          '`!c4 criar` — Cria partida\n`!c4 entrar` — Entra na partida\n`!c4 iniciar` — Inicia o jogo\n`!c4 cancelar` — Cancela partida\n`/c4 settings` — Configurações',
   },
@@ -47,7 +46,7 @@ const LANG = {
     colorTaken:    'That color is already taken! Try another.',
     waitingPlayers:(n) => `Waiting for players... (${n}/5)\nType \`!c4 start\` when everyone is ready.`,
     started:       '🎮 Game started!',
-    turn:          (u, color) => `${u}'s turn ${color} — react with a **letter** then a **number** below. ⏱️ 60s`,
+    turn:          (u, color) => `${u}'s turn ${color} — react with a **column number** below. ⏱️ 60s`,
     invalidMove:   'Invalid move! Column full or out of bounds.',
     wins:          (u) => `🏆 ${u} wins!`,
     draw:          '🤝 Draw! Board is full.',
@@ -66,7 +65,6 @@ const LANG = {
     colors:        { roxo:'🟣', branco:'⚪', laranja:'🟠', azulClaro:'🔵', rosa:'🩷', amarelo:'🟡' },
     colorNames:    { roxo:'Purple', branco:'White', laranja:'Orange', azulClaro:'Light Blue', rosa:'Pink', amarelo:'Yellow' },
     colLabels:     ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'],
-    rowLabels:     ['🇦','🇧','🇨','🇩','🇪','🇫','🇬','🇭','🇮','🇯'],
     empty:         '⬛',
     help:          '`!c4 create` — Create game\n`!c4 join` — Join game\n`!c4 start` — Start game\n`!c4 cancel` — Cancel game\n`/c4 settings` — Settings',
   },
@@ -107,7 +105,7 @@ function renderBoard(game) {
   out += '\n';
 
   for (let r = 0; r < board.rows; r++) {
-    out += T.rowLabels[r];
+    out += T.empty; // no row label
     for (let c = 0; c < board.cols; c++) {
       const pid = board.cells[r][c];
       out += pid ? T.colors[players[pid].colorKey] : T.empty;
@@ -162,8 +160,6 @@ function startTimer(game) {
 }
 
 function advanceTurn(game) {
-  game.pendingLetter = null;
-  game.pendingCol    = null;
   game.turnIndex = (game.turnIndex + 1) % game.turnOrder.length;
 }
 
@@ -188,9 +184,7 @@ async function updateBoardMessage(game, channel) {
       const msg = await channel.send({ embeds: [embed] });
       game.boardMessageId = msg.id;
 
-      // add row reactions (letters)
-      for (let i = 0; i < game.board.rows; i++) await msg.react(T.rowLabels[i]);
-      // add col reactions (numbers)
+      // add col reactions (numbers only)
       for (let i = 0; i < game.board.cols; i++) await msg.react(T.colLabels[i]);
     }
   } catch(e) { console.error(e); }
@@ -220,7 +214,6 @@ client.on('messageCreate', async (msg) => {
       turnIndex:      0,
       board:          null,
       boardMessageId: null,
-      pendingLetter:  null,    // row index waiting
       timer:          null,
       joinMessageId:  null,
     };
@@ -321,57 +314,43 @@ client.on('messageReactionAdd', async (reaction, user) => {
   const currentId = game.turnOrder[game.turnIndex];
   if (uid !== currentId) return; // not their turn
 
-  // remove reaction silently
+  const colLabels = T.colLabels;
+  const colIdx = colLabels.indexOf(emoji);
+  if (colIdx === -1) return; // not a column emoji
+
+  // remove reaction immediately
   await reaction.users.remove(user).catch(()=>{});
 
-  const rowLabels = T.rowLabels;
-  const colLabels = T.colLabels;
-  const rowIdx = rowLabels.indexOf(emoji);
-  const colIdx = colLabels.indexOf(emoji);
+  const col = colIdx;
+  const channel = reaction.message.channel;
 
-  // step 1: pick letter (row)
-  if (rowIdx !== -1 && game.pendingLetter === null) {
-    game.pendingLetter = rowIdx;
+  // drop piece with gravity
+  const landedRow = dropPiece(game.board, col, currentId);
+  if (landedRow === -1) {
+    await channel.send(tChannel(game, 'invalidMove'));
     return;
   }
 
-  // step 2: pick number (col) after letter
-  if (colIdx !== -1 && game.pendingLetter !== null) {
-    const col = colIdx;
-    const channel = reaction.message.channel;
-
-    // drop piece — Connect 4 drops to BOTTOM of column, row hint is just UX
-    const landedRow = dropPiece(game.board, col, currentId);
-    if (landedRow === -1) {
-      game.pendingLetter = null;
-      await channel.send(tChannel(game, 'invalidMove'));
-      return;
-    }
-
-    game.pendingLetter = null;
-
-    // check win
-    if (checkWin(game.board, landedRow, col, currentId)) {
-      clearTimeout(game.timer);
-      await updateBoardMessage(game, channel);
-      await channel.send(tChannel(game, 'wins', `<@${currentId}>`));
-      games.delete(cid);
-      return;
-    }
-
-    // check draw
-    if (isBoardFull(game.board)) {
-      clearTimeout(game.timer);
-      await updateBoardMessage(game, channel);
-      await channel.send(tChannel(game, 'draw'));
-      games.delete(cid);
-      return;
-    }
-
-    advanceTurn(game);
+  // check win
+  if (checkWin(game.board, landedRow, col, currentId)) {
+    clearTimeout(game.timer);
     await updateBoardMessage(game, channel);
+    await channel.send(tChannel(game, 'wins', `<@${currentId}>`));
+    games.delete(cid);
     return;
   }
+
+  // check draw
+  if (isBoardFull(game.board)) {
+    clearTimeout(game.timer);
+    await updateBoardMessage(game, channel);
+    await channel.send(tChannel(game, 'draw'));
+    games.delete(cid);
+    return;
+  }
+
+  advanceTurn(game);
+  await updateBoardMessage(game, channel);
 });
 
 // ── Select menu: color pick ───────────────────────────────────────────────────
