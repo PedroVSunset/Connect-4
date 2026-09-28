@@ -18,7 +18,7 @@ const LANG = {
     created:       (u) => `✅ Partida criada por ${u}! Reaja com ✋ para entrar (2-5 jogadores).`,
     chooseColor:   'Escolha sua cor:',
     colorTaken:    'Essa cor já foi escolhida! Tente outra.',
-    waitingPlayers:(n) => `Aguardando jogadores... (${n}/5)\nDigite \`!c4 iniciar\` quando todos estiverem prontos.`,
+    waitingPlayers:(n) => `Aguardando jogadores... (${n}/5)\nUse \`/c4 iniciar\` quando todos estiverem prontos.`,
     started:       '🎮 Jogo iniciado!',
     turn:          (u, color) => `Vez de ${u} ${color} — escolha a **coluna** reagindo com um número abaixo. ⏱️ 60s`,
     invalidMove:   'Jogada inválida! Coluna cheia ou fora do tabuleiro.',
@@ -47,7 +47,7 @@ const LANG = {
     created:       (u) => `✅ Match created by ${u}! React with ✋ to join (2-5 players).`,
     chooseColor:   'Choose your color:',
     colorTaken:    'That color is already taken! Try another.',
-    waitingPlayers:(n) => `Waiting for players... (${n}/5)\nType \`!c4 start\` when everyone is ready.`,
+    waitingPlayers:(n) => `Waiting for players... (${n}/5)\nUse \`/c4 start\` when everyone is ready.`,
     started:       '🎮 Game started!',
     turn:          (u, color) => `${u}'s turn ${color} — react with a **column number** below. ⏱️ 60s`,
     invalidMove:   'Invalid move! Column full or out of bounds.',
@@ -338,15 +338,12 @@ client.on('messageReactionAdd', async (reaction, user) => {
   const colIdx = colLabels.indexOf(emoji);
   if (colIdx === -1) return; // not a column emoji
 
-  // remove ALL reactions by this user from board message
+  // remove this user's reaction immediately
   try {
-    const boardMsg = await reaction.message.channel.messages.fetch(game.boardMessageId);
-    const T2 = LANG[userLang.get(game.creatorId) || 'pt-BR'];
-    for (const colEmoji of T2.colLabels) {
-      const r = boardMsg.reactions.cache.get(colEmoji);
-      if (r) await r.users.remove(user.id).catch(()=>{});
-    }
-  } catch(e) { console.error('Could not remove reaction:', e.message); }
+    await reaction.users.remove(user.id);
+  } catch(e) {
+    console.error('Could not remove reaction (need Manage Messages permission):', e.message);
+  }
 
   const col = colIdx;
   const channel = reaction.message.channel;
