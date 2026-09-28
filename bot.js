@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const http = require('http');
 
 const client = new Client({
@@ -7,7 +7,9 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildMembers,
   ],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User, Partials.GuildMember],
 });
 
 // ── i18n ────────────────────────────────────────────────────────────────────
@@ -273,7 +275,12 @@ client.on('messageCreate', async (msg) => {
 // ── Reactions ─────────────────────────────────────────────────────────────────
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
-  if (reaction.partial) await reaction.fetch().catch(()=>{});
+
+  // Always fetch partials
+  try {
+    if (reaction.partial) await reaction.fetch();
+    if (reaction.message.partial) await reaction.message.fetch();
+  } catch(e) { console.error('Fetch partial error:', e.message); return; }
 
   const cid  = reaction.message.channelId;
   const game = games.get(cid);
