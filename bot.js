@@ -15,7 +15,7 @@ const client = new Client({
 // ── i18n ────────────────────────────────────────────────────────────────────
 const LANG = {
   'pt-BR': {
-    created:       (u) => `✅ Partida criada por ${u}! Reaja com ✋ para entrar (2-5 jogadores).`,
+    created:       (u) => `✅ Partida criada por ${u}! Reaja com ✋ para entrar (até 5 jogadores). Se iniciar sozinho, o Bot joga com você!`,
     chooseColor:   'Escolha sua cor:',
     colorTaken:    'Essa cor já foi escolhida! Tente outra.',
     waitingPlayers:(n) => `Aguardando jogadores... (${n}/5)\nUse \`/c4 iniciar\` quando todos estiverem prontos.`,
@@ -29,7 +29,8 @@ const LANG = {
     notYourTurn:   'Não é sua vez!',
     alreadyExists: 'Já existe uma partida neste canal! Use `!c4 cancelar` para cancelar.',
     cancelled:     '❌ Partida cancelada.',
-    notEnough:     'São necessários pelo menos 2 jogadores para iniciar.',
+    notEnough:     'Pelo menos 1 jogador precisa entrar na partida (reaja com ✋).',
+    botJoined:     '🤖 Só tem 1 jogador, então o **Bot** entrou na partida para jogar com você!',
     colorChoose:   (u) => `${u} escolheu sua cor!`,
     settingsTitle: '⚙️ Configurações',
     settingsDesc:  'Escolha seu idioma:',
@@ -44,7 +45,7 @@ const LANG = {
     help:          '`!c4 criar` — Cria partida\n`!c4 entrar` — Entra na partida\n`!c4 iniciar` — Inicia o jogo\n`!c4 cancelar` — Cancela partida\n`/c4 settings` — Configurações',
   },
   'en-US': {
-    created:       (u) => `✅ Match created by ${u}! React with ✋ to join (2-5 players).`,
+    created:       (u) => `✅ Match created by ${u}! React with ✋ to join (up to 5 players). Start alone and the Bot will play with you!`,
     chooseColor:   'Choose your color:',
     colorTaken:    'That color is already taken! Try another.',
     waitingPlayers:(n) => `Waiting for players... (${n}/5)\nUse \`/c4 start\` when everyone is ready.`,
@@ -58,7 +59,8 @@ const LANG = {
     notYourTurn:   "It's not your turn!",
     alreadyExists: 'A game already exists in this channel! Use `!c4 cancel` to cancel.',
     cancelled:     '❌ Game cancelled.',
-    notEnough:     'At least 2 players are required to start.',
+    notEnough:     'At least 1 player must join the game (react with ✋).',
+    botJoined:     "🤖 Only 1 player joined, so the **Bot** joined the match to play with you!",
     colorChoose:   (u) => `${u} chose their color!`,
     settingsTitle: '⚙️ Settings',
     settingsDesc:  'Choose your language:',
@@ -87,6 +89,14 @@ function t(userId, key, ...args) {
 function tChannel(game, key, ...args) {
   // uses creator's language for channel-wide messages
   return t(game.creatorId, key, ...args);
+}
+
+// ── Bot ──────────────────────────────────────────────────────────────────────
+const BOT_ID = 'BOT';
+const BOT_DELAY = 1200;
+
+function mention(id) {
+  return id === BOT_ID ? '🤖 Bot' : `<@${id}>`;
 }
 
 // ── Board helpers ─────────────────────────────────────────────────────────────
@@ -152,10 +162,99 @@ function endGame(cid) {
   const game = games.get(cid);
   if (game) {
     clearTimeout(game.timer);
+    clearTimeout(game.botTimer);
     game.timer = null;
+    game.botTimer = null;
     game.phase = 'ended';
   }
   games.delete(cid);
+}
+
+// ── Bot AI ───────────────────────────────────────────────────────────────────
+function simulateDrop(board, col, pid) {
+  for (let r = board.rows - 1; r >= 0; r--) {
+    if (!board.cells[r][col]) {
+      board.cells[r][col] = pid;
+      const win = checkWin(board, r, col, pid);
+      board.cells[r][col] = null;
+      return { row: r, win };
+    }
+  }
+  return null; // coluna cheia
+}
+
+function botChooseColumn(game) {
+  const { board, turnOrder } = game;
+  const opponents = turnOrder.filter(id => id !== BOT_ID);
+  const valid = [];
+  for (let c = 0; c < board.cols; c++) if (!board.cells[0][c]) valid.push(c);
+  if (!valid.length) return -1;
+
+  // 1) ganhar se der
+  for (const c of valid) if (simulateDrop(board, c, BOT_ID).win) return c;
+
+  // 2) bloquear vitória de algum oponente
+  for (const c of valid) {
+    for (const o of opponents) if (simulateDrop(board, c, o).win) return c;
+  }
+
+  // 3) evitar jogadas que deixam o oponente ganhar logo acima
+  const safe = valid.filter(c => {
+    const sim = simulateDrop(board, c, BOT_ID);
+    if (sim.row === 0) return true;
+    board.cells[sim.row][c] = BOT_ID;
+    const risky = opponents.some(o => simulateDrop(board, c, o)?.win);
+    board.cells[sim.row][c] = null;
+    return !risky;
+  });
+  const pool = safe.length ? safe : valid;
+
+  // 4) preferir o centro, com desempate aleatório
+  const center = (board.cols - 1) / 2;
+  pool.sort((a, b) => Math.abs(a - center) - Math.abs(b - center) || Math.random() - 0.5);
+  return pool[0];
+}
+
+function scheduleBotMove(game) {
+  clearTimeout(game.botTimer);
+  game.botTimer = setTimeout(async () => {
+    const g = games.get(game.channelId);
+    if (!g || g.phase !== 'playing') return;
+    if (g.turnOrder[g.turnIndex] !== BOT_ID) return;
+    const channel = await client.channels.fetch(g.channelId).catch(() => null);
+    if (!channel) return;
+    const col = botChooseColumn(g);
+    if (col === -1) return;
+    await applyMove(g, channel, col, BOT_ID);
+  }, BOT_DELAY);
+}
+
+// ── Jogada (usada por jogadores e pelo bot) ──────────────────────────────────
+async function applyMove(game, channel, col, playerId) {
+  const cid = game.channelId;
+  const landedRow = dropPiece(game.board, col, playerId);
+  if (landedRow === -1) {
+    await channel.send(tChannel(game, 'invalidMove'));
+    return false;
+  }
+
+  if (checkWin(game.board, landedRow, col, playerId)) {
+    endGame(cid);
+    await updateBoardMessage(game, channel);
+    await channel.send(tChannel(game, 'wins', mention(playerId)));
+    return true;
+  }
+
+  if (isBoardFull(game.board)) {
+    endGame(cid);
+    await updateBoardMessage(game, channel);
+    await channel.send(tChannel(game, 'draw'));
+    return true;
+  }
+
+  advanceTurn(game);
+  await updateBoardMessage(game, channel);
+  return true;
 }
 
 // ── Timer ────────────────────────────────────────────────────────────────────
@@ -167,7 +266,7 @@ function startTimer(game) {
     const current = g.turnOrder[g.turnIndex];
     const channel = await client.channels.fetch(g.channelId).catch(()=>null);
     if (!channel) return;
-    await channel.send(tChannel(g, 'timeout', `<@${current}>`));
+    await channel.send(tChannel(g, 'timeout', mention(current)));
     advanceTurn(g);
     await updateBoardMessage(g, channel);
   }, 60_000);
@@ -188,7 +287,7 @@ async function updateBoardMessage(game, channel) {
     .setTitle('Connect 4')
     .setDescription(renderBoard(game))
     .setColor(0x5865F2)
-    .addFields({ name: '⏩ Turno', value: tChannel(game, 'turn', `<@${currentId}>`, T.colors[currentP.colorKey]) });
+    .addFields({ name: '⏩ Turno', value: tChannel(game, 'turn', mention(currentId), T.colors[currentP.colorKey]) });
 
   try {
     if (game.boardMessageId) {
@@ -203,7 +302,13 @@ async function updateBoardMessage(game, channel) {
     }
   } catch(e) { console.error(e); }
 
-  startTimer(game);
+  if (game.phase !== 'playing') return;
+  if (currentId === BOT_ID) {
+    clearTimeout(game.timer);
+    scheduleBotMove(game);
+  } else {
+    startTimer(game);
+  }
 }
 
 // ── Slash Commands ────────────────────────────────────────────────────────────
@@ -245,7 +350,11 @@ async function handleSlashCommand(interaction) {
     if (!game) return interaction.reply({ content: T.noGame, ephemeral: true });
     if (game.phase !== 'lobby') return interaction.reply({ content: T.noGame, ephemeral: true });
     if (game.creatorId !== uid) return interaction.reply({ content: T.notCreator, ephemeral: true });
-    if (Object.keys(game.players).length < 2) return interaction.reply({ content: T.notEnough, ephemeral: true });
+    if (Object.keys(game.players).length < 1) return interaction.reply({ content: T.notEnough, ephemeral: true });
+
+    // só 1 jogador? o Bot entra para jogar junto
+    const soloWithBot = Object.keys(game.players).length === 1;
+    if (soloWithBot) game.players[BOT_ID] = { colorKey: null, name: 'Bot', isBot: true };
 
     // auto-assign colors to players who didn't pick one
     const usedColors = Object.values(game.players).filter(p => p.colorKey).map(p => p.colorKey);
@@ -261,6 +370,7 @@ async function handleSlashCommand(interaction) {
     game.turnIndex = 0;
 
     await interaction.reply({ content: tChannel(game, 'started') });
+    if (soloWithBot) await interaction.channel.send(tChannel(game, 'botJoined'));
     await updateBoardMessage(game, interaction.channel);
     return;
   }
@@ -356,31 +466,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
   const col = colIdx;
   const channel = reaction.message.channel;
 
-  // drop piece with gravity
-  const landedRow = dropPiece(game.board, col, currentId);
-  if (landedRow === -1) {
-    await channel.send(tChannel(game, 'invalidMove'));
-    return;
-  }
-
-  // check win
-  if (checkWin(game.board, landedRow, col, currentId)) {
-    endGame(cid);
-    await updateBoardMessage(game, channel);
-    await channel.send(tChannel(game, 'wins', `<@${currentId}>`));
-    return;
-  }
-
-  // check draw
-  if (isBoardFull(game.board)) {
-    endGame(cid);
-    await updateBoardMessage(game, channel);
-    await channel.send(tChannel(game, 'draw'));
-    return;
-  }
-
-  advanceTurn(game);
-  await updateBoardMessage(game, channel);
+  await applyMove(game, channel, col, currentId);
 });
 
 // ── Interactions (slash commands + select menus) ─────────────────────────────
